@@ -1,0 +1,10 @@
+{
+  "extends": "./tsconfig.app.json",
+  "compilerOptions": {
+    "verbatimModuleSyntax": false,
+    "esModuleInterop": true,
+    "resolveJsonModule": true,
+    "types": ["jest", "@testing-library/jest-dom"]
+  },
+  "include": ["__tests__", "src", "jest.setup.ts"]
+}

@@ -1,0 +1,106 @@
+{
+  "app": {
+    "title": "My Collection"
+  },
+  "columns": {
+    "catalogNumber": "Catalog #",
+    "artist": "Artist",
+    "title": "Title",
+    "label": "Label",
+    "format": "Format",
+    "rating": "Rating",
+    "released": "Released",
+    "releaseId": "Release ID",
+    "collectionFolder": "Folder",
+    "dateAdded": "Date Added",
+    "mediaCondition": "Media Condition",
+    "sleeveCondition": "Sleeve Condition",
+    "collectionNotes": "Notes",
+    "purchasePrice": "Purchase Price",
+    "thumbUrl": "Cover",
+    "year": "Year",
+    "country": "Country",
+    "genres": "Genres",
+    "styles": "Styles",
+    "lowestPrice": "Lowest Price",
+    "numForSale": "For Sale",
+    "communityHave": "Have",
+    "communityWant": "Want",
+    "communityRating": "Rating (Community)"
+  },
+  "actions": {
+    "importCSV": "Import CSV",
+    "importing": "Importing...",
+    "columns": "Columns",
+    "search": "Search by artist or title...",
+    "clearSearch": "Clear search"
+  },
+  "import": {
+    "success": "Import complete: {{added}} added, {{skipped}} skipped.",
+    "error": "Import error: {{message}}",
+    "noFile": "No file selected.",
+    "noData": "No valid data found in CSV file."
+  },
+  "sort": {
+    "ascending": "Sort ascending",
+    "descending": "Sort descending",
+    "none": "Remove sort"
+  },
+  "language": {
+    "en": "English",
+    "pl": "Polski"
+  },
+  "table": {
+    "noData": "No items in collection. Import a CSV file to get started.",
+    "noResults": "No items match your search.",
+    "totalItems": "{{count}} items",
+    "priceTotal": "Total: {{total}}"
+  },
+  "price": {
+    "placeholder": "0.00"
+  },
+  "discogs": {
+    "consumerKeyPlaceholder": "Consumer Key",
+    "consumerSecretPlaceholder": "Consumer Secret",
+    "save": "Save",
+    "cancel": "Cancel",
+    "connected": "Discogs credentials saved",
+    "editCredentials": "Edit Credentials",
+    "setCredentials": "Set Discogs Credentials",
+    "clearToken": "Remove",
+    "connectToDiscogs": "Connect to Discogs",
+    "disconnectFromDiscogs": "Disconnect",
+    "oauthConnected": "Connected to Discogs",
+    "oauthConnecting": "Connecting...",
+    "oauthRequired": "OAuth authorization required",
+    "fetchAll": "Fetch from Discogs",
+    "refetchAll": "Refetch All",
+    "cancelFetch": "Cancel",
+    "errors": "errors",
+    "tokenRequired": "Set Discogs credentials to fetch release details.",
+    "notFetched": "Not yet fetched from Discogs.",
+    "fetching": "Fetching...",
+    "fetchNow": "Fetch Now",
+    "fetchError": "Failed to fetch release data.",
+    "refresh": "Refresh from Discogs",
+    "viewOnDiscogs": "View on Discogs",
+    "genres": "Genres",
+    "styles": "Styles",
+    "year": "Year",
+    "country": "Country",
+    "communityStats": "Community",
+    "have": "have",
+    "want": "want",
+    "rating": "rating",
+    "marketplace": "Marketplace",
+    "lowestPrice": "Lowest",
+    "forSale": "For sale",
+    "tracklist": "Tracklist",
+    "priceSuggestions": "Price Suggestions",
+    "condition": "Condition",
+    "suggestedPrice": "Suggested Price",
+    "yourCondition": "yours",
+    "noPriceSuggestions": "No price suggestions available.",
+    "rateLimitWait": "Rate limited, waiting {{seconds}}s (attempt {{attempt}}/{{maxRetries}})..."
+  }
+}

@@ -1,0 +1,106 @@
+{
+  "app": {
+    "title": "Moja Kolekcja"
+  },
+  "columns": {
+    "catalogNumber": "Nr katalogowy",
+    "artist": "Artysta",
+    "title": "Tytuł",
+    "label": "Wytwórnia",
+    "format": "Format",
+    "rating": "Ocena",
+    "released": "Wydano",
+    "releaseId": "ID wydania",
+    "collectionFolder": "Folder",
+    "dateAdded": "Data dodania",
+    "mediaCondition": "Stan nośnika",
+    "sleeveCondition": "Stan okładki",
+    "collectionNotes": "Notatki",
+    "purchasePrice": "Cena zakupu",
+    "thumbUrl": "Okładka",
+    "year": "Rok",
+    "country": "Kraj",
+    "genres": "Gatunki",
+    "styles": "Style",
+    "lowestPrice": "Najniższa cena",
+    "numForSale": "Na sprzedaż",
+    "communityHave": "Posiadają",
+    "communityWant": "Chcą",
+    "communityRating": "Ocena (społeczność)"
+  },
+  "actions": {
+    "importCSV": "Importuj CSV",
+    "importing": "Importowanie...",
+    "columns": "Kolumny",
+    "search": "Szukaj po artyście lub tytule...",
+    "clearSearch": "Wyczyść wyszukiwanie"
+  },
+  "import": {
+    "success": "Import zakończony: {{added}} dodanych, {{skipped}} pominiętych.",
+    "error": "Błąd importu: {{message}}",
+    "noFile": "Nie wybrano pliku.",
+    "noData": "Nie znaleziono prawidłowych danych w pliku CSV."
+  },
+  "sort": {
+    "ascending": "Sortuj rosnąco",
+    "descending": "Sortuj malejąco",
+    "none": "Usuń sortowanie"
+  },
+  "language": {
+    "en": "English",
+    "pl": "Polski"
+  },
+  "table": {
+    "noData": "Brak elementów w kolekcji. Zaimportuj plik CSV, aby rozpocząć.",
+    "noResults": "Brak elementów pasujących do wyszukiwania.",
+    "totalItems": "{{count}} elementów",
+    "priceTotal": "Suma: {{total}}"
+  },
+  "price": {
+    "placeholder": "0,00"
+  },
+  "discogs": {
+    "consumerKeyPlaceholder": "Consumer Key",
+    "consumerSecretPlaceholder": "Consumer Secret",
+    "save": "Zapisz",
+    "cancel": "Anuluj",
+    "connected": "Dane Discogs zapisane",
+    "editCredentials": "Edytuj dane",
+    "setCredentials": "Ustaw dane Discogs",
+    "clearToken": "Usuń",
+    "connectToDiscogs": "Połącz z Discogs",
+    "disconnectFromDiscogs": "Rozłącz",
+    "oauthConnected": "Połączono z Discogs",
+    "oauthConnecting": "Łączenie...",
+    "oauthRequired": "Wymagana autoryzacja OAuth",
+    "fetchAll": "Pobierz z Discogs",
+    "refetchAll": "Pobierz ponownie",
+    "cancelFetch": "Anuluj",
+    "errors": "błędów",
+    "tokenRequired": "Ustaw dane Discogs, aby pobrać szczegóły wydań.",
+    "notFetched": "Nie pobrano jeszcze z Discogs.",
+    "fetching": "Pobieranie...",
+    "fetchNow": "Pobierz teraz",
+    "fetchError": "Nie udało się pobrać danych wydania.",
+    "refresh": "Odśwież z Discogs",
+    "viewOnDiscogs": "Zobacz na Discogs",
+    "genres": "Gatunki",
+    "styles": "Style",
+    "year": "Rok",
+    "country": "Kraj",
+    "communityStats": "Społeczność",
+    "have": "posiadają",
+    "want": "chcą",
+    "rating": "ocena",
+    "marketplace": "Rynek",
+    "lowestPrice": "Najniższa",
+    "forSale": "Na sprzedaż",
+    "tracklist": "Lista utworów",
+    "priceSuggestions": "Sugerowane ceny",
+    "condition": "Stan",
+    "suggestedPrice": "Sugerowana cena",
+    "yourCondition": "twój",
+    "noPriceSuggestions": "Brak sugerowanych cen.",
+    "rateLimitWait": "Limit zapytań, oczekiwanie {{seconds}}s (próba {{attempt}}/{{maxRetries}})..."
+  }
+}
