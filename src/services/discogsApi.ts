@@ -262,7 +262,7 @@ export async function fetchPriceSuggestions(
   credentials: DiscogsCredentials,
   signal?: AbortSignal,
 ): Promise<DiscogsPriceSuggestionsResponse> {
-  const url = `${BASE_URL}/marketplace/price-suggestions/${releaseId}`;
+  const url = `${BASE_URL}/marketplace/price_suggestions/${releaseId}`;
   const response = await rateLimitedFetch(url, credentials, signal);
   return response.json() as Promise<DiscogsPriceSuggestionsResponse>;
 }
