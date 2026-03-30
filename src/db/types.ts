@@ -131,7 +131,6 @@ export const DEFAULT_VISIBLE_COLUMNS: ColumnKey[] = [
   'thumbUrl',
   'artist',
   'title',
-  'format',
   'collectionFolder',
   'dateAdded',
   'mediaCondition',

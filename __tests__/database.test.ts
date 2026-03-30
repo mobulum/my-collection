@@ -217,6 +217,59 @@ describe('database operations', () => {
       expect(items[0].purchasePrice).toBe(29.99);
       expect(items[0].thumbUrl).toBe('https://example.com/thumb.jpg');
     });
+
+    it('merges metadata without overwriting previously-fetched fields', async () => {
+      await addItems([
+        makeItem({ releaseId: 100, dateAdded: '2025-01-01 00:00:00' }),
+      ]);
+
+      // First fetch sets all fields
+      const firstMetadata: ReleaseMetadata = {
+        thumbUrl: 'https://example.com/thumb.jpg',
+        coverUrl: 'https://example.com/cover.jpg',
+        genres: ['Rock'],
+        styles: ['Heavy Metal'],
+        year: 1986,
+        country: 'US',
+        lowestPrice: 15.99,
+        numForSale: 42,
+        communityHave: 1000,
+        communityWant: 500,
+        communityRating: 4.5,
+        discogsUrl: 'https://www.discogs.com/release/100',
+        lastFetched: '2025-03-29T12:00:00.000Z',
+      };
+
+      await updateReleaseMetadata(100, firstMetadata);
+
+      // Second fetch has some undefined values (e.g. API returned incomplete data)
+      const secondMetadata: ReleaseMetadata = {
+        thumbUrl: 'https://example.com/new-thumb.jpg',
+        year: undefined,
+        lowestPrice: undefined,
+        communityRating: undefined,
+        lastFetched: '2025-03-30T12:00:00.000Z',
+      };
+
+      await updateReleaseMetadata(100, secondMetadata);
+
+      const items = await getAllItems();
+      const item = items[0];
+
+      // Updated fields should have new values
+      expect(item.thumbUrl).toBe('https://example.com/new-thumb.jpg');
+      expect(item.lastFetched).toBe('2025-03-30T12:00:00.000Z');
+
+      // Previously-fetched fields with undefined in second update should be preserved
+      expect(item.year).toBe(1986);
+      expect(item.lowestPrice).toBe(15.99);
+      expect(item.communityRating).toBe(4.5);
+
+      // Untouched fields from first fetch should still be present
+      expect(item.coverUrl).toBe('https://example.com/cover.jpg');
+      expect(item.genres).toEqual(['Rock']);
+      expect(item.country).toBe('US');
+    });
   });
 
   describe('getUniqueReleaseIds', () => {

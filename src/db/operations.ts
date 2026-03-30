@@ -62,10 +62,19 @@ export async function updateReleaseMetadata(
     .equals(releaseId)
     .toArray();
 
+  // Strip undefined values so Dexie merges only defined fields,
+  // preserving previously-fetched data that the current response lacks.
+  const changes: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(metadata)) {
+    if (value !== undefined) {
+      changes[key] = value;
+    }
+  }
+
   let updated = 0;
   for (const item of items) {
     if (item.id !== undefined) {
-      await db.collection.update(item.id, metadata as Partial<CollectionItem>);
+      await db.collection.update(item.id, changes as Partial<CollectionItem>);
       updated++;
     }
   }
