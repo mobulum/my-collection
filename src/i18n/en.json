@@ -26,7 +26,8 @@
     "numForSale": "For Sale",
     "communityHave": "Have",
     "communityWant": "Want",
-    "communityRating": "Rating (Community)"
+    "communityRating": "Rating (Community)",
+    "suggestedPrice": "Suggested Price"
   },
   "actions": {
     "importCSV": "Import CSV",

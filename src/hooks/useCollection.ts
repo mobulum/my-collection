@@ -55,6 +55,17 @@ export function useCollection() {
         return (aVal - bVal) * multiplier;
       }
 
+      if (field === 'suggestedPrice') {
+        const aCondition = a.mediaCondition;
+        const bCondition = b.mediaCondition;
+        aVal = aCondition ? (a.priceSuggestions?.[aCondition]?.value ?? null) : null;
+        bVal = bCondition ? (b.priceSuggestions?.[bCondition]?.value ?? null) : null;
+        if (aVal === null && bVal === null) return 0;
+        if (aVal === null) return 1;
+        if (bVal === null) return -1;
+        return (aVal - bVal) * multiplier;
+      }
+
       aVal = a[field] ?? '';
       bVal = b[field] ?? '';
 

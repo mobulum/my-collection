@@ -81,7 +81,8 @@ export type SortField =
   | 'collectionFolder'
   | 'artist'
   | 'title'
-  | 'purchasePrice';
+  | 'purchasePrice'
+  | 'suggestedPrice';
 
 export type SortDirection = 'asc' | 'desc';
 
@@ -98,7 +99,7 @@ export type ColumnKey = keyof Omit<
   | 'priceSuggestions'
   | 'lastFetched'
   | 'discogsUrl'
->;
+> | 'suggestedPrice';
 
 export const ALL_COLUMNS: ColumnKey[] = [
   'thumbUrl',
@@ -116,6 +117,7 @@ export const ALL_COLUMNS: ColumnKey[] = [
   'sleeveCondition',
   'collectionNotes',
   'purchasePrice',
+  'suggestedPrice',
   'year',
   'country',
   'genres',
@@ -136,6 +138,7 @@ export const DEFAULT_VISIBLE_COLUMNS: ColumnKey[] = [
   'mediaCondition',
   'sleeveCondition',
   'purchasePrice',
+  'suggestedPrice',
 ];
 
 export interface CSVRow {

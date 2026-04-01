@@ -91,6 +91,19 @@ export function CollectionRow({
               : ''}
           </span>
         );
+      case 'suggestedPrice': {
+        const condition = item.mediaCondition;
+        const suggestion = condition
+          ? item.priceSuggestions?.[condition]
+          : undefined;
+        return (
+          <span className="whitespace-nowrap tabular-nums">
+            {suggestion
+              ? `${suggestion.value.toFixed(2)} ${suggestion.currency}`
+              : ''}
+          </span>
+        );
+      }
       default:
         return (
           <span className="line-clamp-2">

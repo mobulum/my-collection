@@ -15,6 +15,7 @@ const SORTABLE_FIELDS: SortField[] = [
   'title',
   'dateAdded',
   'purchasePrice',
+  'suggestedPrice',
 ];
 
 interface CollectionTableProps {
