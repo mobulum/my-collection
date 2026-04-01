@@ -28,6 +28,7 @@ CI pipeline runs: lint -> test -> build (Node 22).
 - Jest 30 + ts-jest + @testing-library/react + fake-indexeddb
 - ESLint 9 flat config (no Prettier)
 - Package type: `"module"` (ESM)
+- Deployment: GitHub Pages via GitHub Actions (`.github/workflows/deploy.yml`)
 
 ## TypeScript Constraints
 
@@ -83,6 +84,35 @@ CI pipeline runs: lint -> test -> build (Node 22).
 - Dexie (IndexedDB) for collection data.
 - `AbortController` for cancellable fetch operations.
 
+## Column System
+
+### Types (`src/db/types.ts`)
+- **`ColumnKey`** — union of all displayable `CollectionItem` keys (excluding `id`, `coverUrl`, `tracklist`, `priceSuggestions`, `lastFetched`, `discogsUrl`) plus the virtual column `'suggestedPrice'`.
+- **`SortField`** — union: `'dateAdded' | 'collectionFolder' | 'artist' | 'title' | 'format' | 'purchasePrice' | 'suggestedPrice'`.
+- **`ALL_COLUMNS`** — 25 columns in display order.
+- **`DEFAULT_VISIBLE_COLUMNS`** — 10 columns: `thumbUrl`, `artist`, `title`, `format`, `collectionFolder`, `dateAdded`, `mediaCondition`, `sleeveCondition`, `purchasePrice`, `suggestedPrice`.
+
+### Sortable fields (`src/components/CollectionTable/CollectionTable.tsx`)
+`SORTABLE_FIELDS`: `collectionFolder`, `artist`, `title`, `format`, `dateAdded`, `purchasePrice`, `suggestedPrice`. Default sort: `dateAdded desc`.
+
+### Virtual column: `suggestedPrice`
+Not stored in DB. Computed at render time from `item.priceSuggestions[item.mediaCondition]`. Displays `value.toFixed(2) + currency`. Sort uses numeric comparison with nulls pushed to bottom.
+
+### Format normalization (`src/utils/formatters.ts`)
+`normalizeFormat(format)` maps raw Discogs format strings (e.g., `"CD, Album"`, `"2xCD, Album"`, `"LP, Album, RE"`, `"Blu-ray, Blu-ray Audio"`) to simplified labels using keyword matching in priority order:
+
+| Priority | Keywords | Label |
+|----------|----------|-------|
+| 1 | `blu-ray`, `bd` | `BD` |
+| 2 | `dvd` | `DVD` |
+| 3 | `cd`, `sacd` | `CD` |
+| 4 | `lp`, `vinyl`, `7"`, `10"`, `12"` | `VINYL` |
+
+Blu-ray/BD checked first to avoid false `CD` match on `"SACD"`. Returns original string if no match. Used for both display rendering and sort comparison.
+
+### Column visibility
+Persisted in localStorage via `useColumnVisibility` hook. `DEFAULT_VISIBLE_COLUMNS` only affects new users or cleared storage.
+
 ## Testing
 
 ### Structure
@@ -90,6 +120,15 @@ CI pipeline runs: lint -> test -> build (Node 22).
 - `*.test.ts` for logic, `*.test.tsx` for components.
 - Use `describe` + `it` blocks (not `test`). Nest `describe` for grouping.
 - Test names start with a verb: "maps release data...", "retries on 429...".
+
+### Test files
+| File | Focus | Tests |
+|------|-------|-------|
+| `csvParser.test.ts` | CSV parsing, condition mapping | 13 |
+| `database.test.ts` | Dexie operations, dedup, merge | 14 |
+| `discogsApi.test.ts` | API client, rate limiting, OAuth | 25 |
+| `formatters.test.ts` | normalizeFormat (CD/DVD/BD/VINYL) | 21 |
+| `CollectionTable.test.tsx` | Table rendering, sorting, UI | 6 |
 
 ### Setup
 - `fake-indexeddb/auto` loaded via `setupFiles` — Dexie works in tests automatically.
@@ -111,31 +150,139 @@ Always run `npm test` after making changes. If you modified a single file, run j
 
 ## Database (Dexie / IndexedDB)
 
-- Schema in `src/db/database.ts` with versioned migrations.
-- Compound unique key `[releaseId+dateAdded]` for CSV deduplication.
-- Version 2 adds `releaseId` and `lastFetched` indexes.
-- Operations are standalone async functions in `src/db/operations.ts`.
-- Dexie's `UpdateSpec` doesn't accept interfaces with array properties — cast to `Partial<CollectionItem>` when calling `db.collection.update()`.
+### Schema (`src/db/database.ts`)
+- DB name: `MyCollectionDB`.
+- **Version 1:** `++id, [releaseId+dateAdded], artist, title, collectionFolder, dateAdded, purchasePrice`.
+- **Version 2:** Adds `releaseId` and `lastFetched` indexes (for querying unfetched items and updating by releaseId).
+- Compound unique key `[releaseId+dateAdded]` for CSV deduplication (same album may appear in different folders).
+
+### Operations (`src/db/operations.ts`)
+| Function | Description |
+|----------|-------------|
+| `addItems(items)` | Bulk insert with dedup on `[releaseId+dateAdded]`. Returns `{ added, skipped }`. |
+| `getAllItems()` | Returns all `CollectionItem` records. |
+| `updatePurchasePrice(id, price)` | Updates single item's `purchasePrice` by auto-increment ID. |
+| `updateReleaseMetadata(releaseId, metadata)` | Updates ALL items matching `releaseId`. Strips `undefined` values before update to avoid overwriting previously-fetched fields. Casts to `Partial<CollectionItem>` to work around Dexie `UpdateSpec` type limitation with array properties. |
+| `getUniqueReleaseIds()` | Returns deduplicated array of all release IDs. |
+| `getUnfetchedReleaseIds()` | Returns deduplicated release IDs where `lastFetched` is falsy. |
+| `getItemCount()` | Returns total item count. |
+| `clearAll()` | Clears all items from collection table. |
+
+### `ReleaseMetadata` interface
+Exported from `operations.ts`. Contains all optional API metadata fields (thumbUrl, coverUrl, genres, styles, year, country, tracklist, lowestPrice, numForSale, communityHave/Want/Rating, priceSuggestions, discogsUrl) plus required `lastFetched: string`.
 
 ## Discogs API Integration
 
+### Proxy (`src/services/discogsApi.ts`)
 - All API calls go through the Cloudflare Worker proxy at `https://discogs.my-collection.mobulum.com`, not directly to `api.discogs.com`.
 - Auth: `X-Discogs-Consumer-Key` and `X-Discogs-Consumer-Secret` headers (not query params).
-- OAuth 1.0a flow handled server-side by the worker. SPA calls `/oauth/authorize`, `/oauth/status`, `DELETE /oauth/token`.
-- Rate limiting: ~1.1s min delay, adaptive slowdown when `X-Discogs-Ratelimit-Remaining < 5`, auto-retry with exponential backoff on 429 (up to 5 retries).
-- Each item requires 2 API calls (release + price suggestions). Price suggestions may 403/404 — catch and continue.
+- Each item requires 2 API calls: release data + price suggestions. Price suggestions may 403/404 — catch and continue.
+
+### Rate limiting constants
+| Constant | Value | Description |
+|----------|-------|-------------|
+| `MIN_REQUEST_DELAY_MS` | `1100` | Minimum delay between requests (~1.1s) |
+| `MAX_RETRIES` | `5` | Max retry attempts on 429 |
+| `DEFAULT_RETRY_WAIT_MS` | `30_000` | Default wait when no `Retry-After` header |
+| `BACKOFF_MULTIPLIER` | `2` | Exponential backoff multiplier |
+| `RATE_LIMIT_LOW_THRESHOLD` | `5` | Switch to slow mode when remaining < 5 |
+| `RATE_LIMIT_SLOW_DELAY_MS` | `3000` | Delay in slow mode (3s) |
+
+Rate limit UI feedback via `RateLimitListener` callback + `RateLimitEvent` objects.
+
+### OAuth 1.0a flow
+Handled server-side by the Cloudflare Worker (separate repo at `/Users/zenedith/git/discogs-api-worker/`).
+
+1. SPA calls `startOAuthFlow(credentials, callbackUrl)` → worker `GET /oauth/authorize?callback_url=<spa_url>`
+2. Worker returns `{ authorizeUrl }` → SPA redirects user to Discogs
+3. User authorizes → Discogs redirects to worker `/oauth/callback`
+4. Worker exchanges verifier for access token, caches `hash(key:secret) → access_token` in KV
+5. Worker redirects user back to SPA with `?oauth=success`
+6. SPA detects param, calls `checkOAuthStatus(credentials)` → worker `GET /oauth/status`
+7. Disconnect: `revokeOAuthToken(credentials)` → worker `DELETE /oauth/token`
+
+### API functions
+| Function | Description |
+|----------|-------------|
+| `fetchRelease(releaseId, credentials, signal?)` | GET `/releases/{id}` |
+| `fetchPriceSuggestions(releaseId, credentials, signal?)` | GET `/marketplace/price_suggestions/{id}` |
+| `mapReleaseToMetadata(release, priceSuggestions?)` | Transforms API response to `ReleaseMetadata` |
+| `fetchReleaseWithPrices(releaseId, credentials, signal?)` | Combined fetch (release + prices, swallows 403/404 on prices) |
+| `startOAuthFlow(credentials, callbackUrl)` | Initiates OAuth flow |
+| `checkOAuthStatus(credentials)` | Checks if OAuth is completed |
+| `revokeOAuthToken(credentials)` | Revokes OAuth access token |
+| `setRateLimitListener(listener)` | Sets global rate limit callback for UI feedback |
+| `resetRateLimiter()` | Resets internal rate limiter state (for testing) |
+
+## Vite Configuration
+
+```ts
+base: '/'
+plugins: [react(), tailwindcss()]
+server.allowedHosts: ['localhost-vite.mobulum.xyz', 'my-collection.mobulum.com', 'my-collection.github.io']
+```
 
 ## Project Layout
 
 ```
 src/
-  components/        # Feature-based directories (CollectionTable/, CSVImport/, etc.)
-  db/                # Dexie schema, types, CRUD operations
-  hooks/             # Custom React hooks (all business logic)
-  i18n/              # en.json, pl.json, i18next config
-  services/          # Discogs API client (rate limiting, OAuth, proxy)
-  utils/             # CSV parser, formatters
-  App.tsx            # Root component
-__tests__/           # All test files
-.github/workflows/   # CI/CD (deploy.yml)
+  components/
+    CollectionTable/
+      CollectionRow.tsx         # Row rendering with renderCell switch
+      CollectionTable.tsx       # Table wrapper, SORTABLE_FIELDS, headers
+      ColumnSelector.tsx        # Column visibility toggle UI
+      ExpandedDetails.tsx       # Expanded row details (metadata, tracklist, prices)
+      PriceSuggestionsDisplay.tsx # Price suggestions table per condition
+      PurchasePriceInput.tsx    # Inline editable purchase price
+      SearchBar.tsx             # Search input with clear button
+      SortableHeader.tsx        # Clickable sort header (asc/desc/none)
+    CSVImport/
+      CSVImportButton.tsx       # File picker + import trigger
+    DiscogsSettings/
+      DiscogsTokenInput.tsx     # Credentials input, OAuth connect/disconnect
+    LanguageSwitcher/
+      LanguageSwitcher.tsx      # EN/PL toggle
+    Layout/
+      Header.tsx                # App header with title and actions
+      Layout.tsx                # Page layout wrapper
+  db/
+    database.ts                 # Dexie schema (v1, v2), CollectionDatabase class
+    operations.ts               # CRUD functions, ReleaseMetadata interface
+    types.ts                    # CollectionItem, ColumnKey, SortField, MediaCondition, etc.
+  hooks/
+    useCollection.ts            # Items, sort, search, filter, priceTotal
+    useColumnVisibility.ts      # localStorage-persisted column toggle
+    useCSVImport.ts             # CSV file import logic
+    useDiscogsAuth.ts           # OAuth flow (startOAuth, checkStatus, disconnect)
+    useDiscogsFetch.ts          # Batch + single fetch with progress tracking
+  i18n/
+    en.json                     # English translations (107 keys)
+    pl.json                     # Polish translations (107 keys)
+    index.ts                    # i18next configuration
+  services/
+    discogsApi.ts               # API client, rate limiting, OAuth functions
+  utils/
+    csvParser.ts                # PapaParse wrapper, row mapping, condition parsing
+    formatters.ts               # formatDate, formatPrice, normalizeFormat
+  App.tsx                       # Root component (default export)
+  App.css                       # Minimal base styles
+  main.tsx                      # React DOM entry point
+  index.css                     # Tailwind imports
+__tests__/
+  csvParser.test.ts             # 13 tests — CSV parsing, condition mapping
+  database.test.ts              # 14 tests — Dexie operations, dedup, merge
+  discogsApi.test.ts            # 25 tests — API client, rate limiting, OAuth
+  formatters.test.ts            # 21 tests — normalizeFormat (CD/DVD/BD/VINYL)
+  CollectionTable.test.tsx      # 6 tests — table rendering, sorting, UI
+.github/workflows/
+  deploy.yml                    # CI/CD: lint -> test -> build -> deploy to GitHub Pages
+jest.config.ts                  # Jest 30 config (jsdom, ts-jest, fake-indexeddb)
+jest.setup.ts                   # @testing-library/jest-dom + structuredClone polyfill
+tsconfig.json                   # Root config with project references
+tsconfig.app.json               # App config (erasableSyntaxOnly, verbatimModuleSyntax)
+tsconfig.test.json              # Test config (no verbatimModuleSyntax, esModuleInterop)
+vite.config.ts                  # Vite 8 config (base: '/', react, tailwindcss)
+eslint.config.js                # ESLint 9 flat config (ESM)
+package.json                    # type: "module", scripts, dependencies
+AGENTS.md                       # This file
 ```
