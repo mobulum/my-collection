@@ -1,4 +1,4 @@
-import type { TracklistItem, PriceSuggestion } from '../db/types';
+import type { TracklistItem, PriceSuggestion, CollectionItem } from '../db/types';
 import type { ReleaseMetadata } from '../db/operations';
 
 export interface DiscogsCredentials {
@@ -165,6 +165,7 @@ async function rateLimitedFetch(
   url: string,
   credentials: DiscogsCredentials,
   signal?: AbortSignal,
+  method: string = 'GET',
 ): Promise<Response> {
   const releaseId = extractReleaseId(url);
 
@@ -179,6 +180,7 @@ async function rateLimitedFetch(
     lastRequestTime = Date.now();
 
     const response = await fetch(url, {
+      method,
       headers: buildAuthHeaders(credentials),
       signal,
     });
@@ -360,17 +362,7 @@ export async function startOAuthFlow(
   callbackUrl: string,
 ): Promise<OAuthAuthorizeResponse> {
   const url = `${BASE_URL}/oauth/authorize?callback_url=${encodeURIComponent(callbackUrl)}`;
-  const response = await fetch(url, {
-    headers: buildAuthHeaders(credentials),
-  });
-
-  if (!response.ok) {
-    const body = await response.text().catch(() => '');
-    throw new Error(
-      `OAuth authorize failed: ${response.status} ${response.statusText} ${body}`,
-    );
-  }
-
+  const response = await rateLimitedFetch(url, credentials);
   return response.json() as Promise<OAuthAuthorizeResponse>;
 }
 
@@ -378,36 +370,164 @@ export async function checkOAuthStatus(
   credentials: DiscogsCredentials,
 ): Promise<OAuthStatusResponse> {
   const url = `${BASE_URL}/oauth/status`;
-  const response = await fetch(url, {
-    headers: buildAuthHeaders(credentials),
-  });
-
-  if (!response.ok) {
+  try {
+    const response = await rateLimitedFetch(url, credentials);
+    return response.json() as Promise<OAuthStatusResponse>;
+  } catch {
+    // Non-OK responses (401, etc.) mean not authenticated
     return { authenticated: false };
   }
-
-  return response.json() as Promise<OAuthStatusResponse>;
 }
 
 export async function revokeOAuthToken(
   credentials: DiscogsCredentials,
 ): Promise<void> {
   const url = `${BASE_URL}/oauth/token`;
-  const response = await fetch(url, {
-    method: 'DELETE',
-    headers: buildAuthHeaders(credentials),
-  });
-
-  if (!response.ok) {
-    const body = await response.text().catch(() => '');
-    throw new Error(
-      `OAuth revoke failed: ${response.status} ${response.statusText} ${body}`,
-    );
-  }
+  await rateLimitedFetch(url, credentials, undefined, 'DELETE');
 }
 
 /** Reset the rate limiter (useful for testing) */
 export function resetRateLimiter(): void {
   lastRequestTime = 0;
   currentDelay = MIN_REQUEST_DELAY_MS;
+}
+
+// --- Collection API types ---
+
+export interface DiscogsIdentityResponse {
+  id: number;
+  username: string;
+  resource_url: string;
+  consumer_name: string;
+}
+
+export interface DiscogsCollectionFolder {
+  id: number;
+  count: number;
+  name: string;
+  resource_url: string;
+}
+
+export interface DiscogsCollectionFormat {
+  name: string;
+  qty: string;
+  descriptions?: string[];
+}
+
+export interface DiscogsCollectionRelease {
+  id: number;
+  instance_id: number;
+  folder_id: number;
+  rating: number;
+  date_added: string;
+  basic_information: {
+    id: number;
+    title: string;
+    year: number;
+    resource_url: string;
+    thumb: string;
+    cover_image: string;
+    formats: DiscogsCollectionFormat[];
+    labels: Array<{ name: string; catno: string; id: number }>;
+    artists: Array<{ name: string; id: number }>;
+    genres?: string[];
+    styles?: string[];
+  };
+}
+
+export interface DiscogsPagination {
+  page: number;
+  pages: number;
+  per_page: number;
+  items: number;
+}
+
+export interface DiscogsCollectionResponse {
+  pagination: DiscogsPagination;
+  releases: DiscogsCollectionRelease[];
+}
+
+// --- Collection API functions ---
+
+export async function fetchIdentity(
+  credentials: DiscogsCredentials,
+  signal?: AbortSignal,
+): Promise<DiscogsIdentityResponse> {
+  const url = `${BASE_URL}/oauth/identity`;
+  const response = await rateLimitedFetch(url, credentials, signal);
+  return response.json() as Promise<DiscogsIdentityResponse>;
+}
+
+export async function fetchCollectionFolders(
+  username: string,
+  credentials: DiscogsCredentials,
+  signal?: AbortSignal,
+): Promise<DiscogsCollectionFolder[]> {
+  const url = `${BASE_URL}/users/${encodeURIComponent(username)}/collection/folders`;
+  const response = await rateLimitedFetch(url, credentials, signal);
+  const data = (await response.json()) as { folders: DiscogsCollectionFolder[] };
+  return data.folders;
+}
+
+export async function fetchCollectionPage(
+  username: string,
+  folderId: number,
+  page: number,
+  perPage: number,
+  credentials: DiscogsCredentials,
+  signal?: AbortSignal,
+): Promise<DiscogsCollectionResponse> {
+  const url = `${BASE_URL}/users/${encodeURIComponent(username)}/collection/folders/${folderId}/releases?page=${page}&per_page=${perPage}`;
+  const response = await rateLimitedFetch(url, credentials, signal);
+  return response.json() as Promise<DiscogsCollectionResponse>;
+}
+
+export function buildFormatString(
+  formats: DiscogsCollectionFormat[],
+): string {
+  if (!formats || formats.length === 0) return '';
+
+  const fmt = formats[0];
+  const qty = parseInt(fmt.qty, 10);
+  const prefix = qty > 1 ? `${qty}x` : '';
+  const parts = [prefix + fmt.name];
+
+  if (fmt.descriptions && fmt.descriptions.length > 0) {
+    parts.push(...fmt.descriptions);
+  }
+
+  return parts.join(', ');
+}
+
+export function mapCollectionReleaseToItem(
+  release: DiscogsCollectionRelease,
+  folderName: string,
+): Omit<CollectionItem, 'id'> {
+  const bi = release.basic_information;
+  const artist = bi.artists.map((a) => a.name).join(', ');
+  const label = bi.labels.length > 0 ? bi.labels[0].name : '';
+  const catalogNumber = bi.labels.length > 0 ? bi.labels[0].catno : '';
+  const format = buildFormatString(bi.formats);
+
+  return {
+    catalogNumber,
+    artist,
+    title: bi.title,
+    label,
+    format,
+    rating: release.rating > 0 ? String(release.rating) : '',
+    released: bi.year > 0 ? String(bi.year) : '',
+    releaseId: bi.id,
+    collectionFolder: folderName,
+    dateAdded: release.date_added,
+    mediaCondition: '',
+    sleeveCondition: '',
+    collectionNotes: '',
+    purchasePrice: null,
+    thumbUrl: bi.thumb || undefined,
+    coverUrl: bi.cover_image || undefined,
+    genres: bi.genres ?? [],
+    styles: bi.styles ?? [],
+    year: bi.year > 0 ? bi.year : undefined,
+  };
 }

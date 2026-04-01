@@ -9,6 +9,7 @@ import { useCollection } from './hooks/useCollection';
 import { useColumnVisibility } from './hooks/useColumnVisibility';
 import { useDiscogsAuth } from './hooks/useDiscogsAuth';
 import { useDiscogsFetch } from './hooks/useDiscogsFetch';
+import { useDiscogsSync } from './hooks/useDiscogsSync';
 
 function App() {
   const { t } = useTranslation();
@@ -48,6 +49,9 @@ function App() {
     credentials,
     refreshItems,
   );
+
+  const { syncProgress, syncCollection, cancelSync, clearSyncStatus } =
+    useDiscogsSync(credentials, refreshItems);
 
   if (isLoading) {
     return (
@@ -143,6 +147,74 @@ function App() {
                     className="px-2 py-1 text-xs bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 rounded hover:bg-red-200 dark:hover:bg-red-900/50"
                   >
                     {t('discogs.cancelFetch')}
+                  </button>
+                </div>
+              )}
+            </>
+          )}
+
+          {isAuthenticated && !progress.isRunning && (
+            <>
+              {!syncProgress.isRunning && syncProgress.phase === 'idle' && (
+                <button
+                  onClick={syncCollection}
+                  className="px-3 py-1.5 text-sm bg-green-600 text-white rounded hover:bg-green-700"
+                >
+                  {t('discogs.syncCollection')}
+                </button>
+              )}
+
+              {syncProgress.isRunning && (
+                <div className="flex items-center gap-3">
+                  <span className="text-xs text-gray-500 dark:text-gray-400">
+                    {syncProgress.phase === 'identity' &&
+                      t('discogs.syncPhaseIdentity')}
+                    {syncProgress.phase === 'folders' &&
+                      t('discogs.syncPhaseFolders')}
+                    {syncProgress.phase === 'releases' &&
+                      t('discogs.syncPhaseReleases', {
+                        current: syncProgress.currentPage,
+                        total: syncProgress.totalPages,
+                      })}
+                    {syncProgress.phase === 'saving' &&
+                      t('discogs.syncPhaseSaving')}
+                  </span>
+                  <button
+                    onClick={cancelSync}
+                    className="px-2 py-1 text-xs bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 rounded hover:bg-red-200 dark:hover:bg-red-900/50"
+                  >
+                    {t('discogs.cancelSync')}
+                  </button>
+                </div>
+              )}
+
+              {syncProgress.phase === 'done' && (
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-green-600 dark:text-green-400">
+                    {t('discogs.syncSuccess', {
+                      added: syncProgress.added,
+                      skipped: syncProgress.skipped,
+                    })}
+                  </span>
+                  <button
+                    onClick={clearSyncStatus}
+                    className="text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                  >
+                    &times;
+                  </button>
+                </div>
+              )}
+
+              {syncProgress.error && (
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-red-600 dark:text-red-400">
+                    {t('discogs.syncError', { message: syncProgress.error })}
+                  </span>
+                  <button
+                    onClick={clearSyncStatus}
+                    className="text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                  >
+                    &times;
                   </button>
                 </div>
               )}

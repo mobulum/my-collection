@@ -52,7 +52,7 @@
     "pl": "Polski"
   },
   "table": {
-    "noData": "No items in collection. Import a CSV file to get started.",
+    "noData": "No items in collection. Import a CSV file or sync from Discogs to get started.",
     "noResults": "No items match your search.",
     "totalItems": "{{count}} items",
     "priceTotal": "Total: {{total}}"
@@ -102,6 +102,15 @@
     "suggestedPrice": "Suggested Price",
     "yourCondition": "yours",
     "noPriceSuggestions": "No price suggestions available.",
-    "rateLimitWait": "Rate limited, waiting {{seconds}}s (attempt {{attempt}}/{{maxRetries}})..."
+    "rateLimitWait": "Rate limited, waiting {{seconds}}s (attempt {{attempt}}/{{maxRetries}})...",
+    "syncCollection": "Sync Collection",
+    "syncing": "Syncing...",
+    "syncPhaseIdentity": "Fetching identity...",
+    "syncPhaseFolders": "Fetching folders...",
+    "syncPhaseReleases": "Fetching releases (page {{current}}/{{total}})...",
+    "syncPhaseSaving": "Saving...",
+    "syncSuccess": "Sync complete: {{added}} added, {{skipped}} skipped.",
+    "syncError": "Sync error: {{message}}",
+    "cancelSync": "Cancel"
   }
 }

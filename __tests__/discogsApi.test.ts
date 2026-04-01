@@ -7,12 +7,19 @@ import {
   startOAuthFlow,
   checkOAuthStatus,
   revokeOAuthToken,
+  buildFormatString,
+  mapCollectionReleaseToItem,
+  fetchIdentity,
+  fetchCollectionFolders,
+  fetchCollectionPage,
 } from '../src/services/discogsApi';
 import type {
   DiscogsReleaseResponse,
   DiscogsPriceSuggestionsResponse,
   DiscogsCredentials,
   RateLimitEvent,
+  DiscogsCollectionFormat,
+  DiscogsCollectionRelease,
 } from '../src/services/discogsApi';
 
 const mockRelease: DiscogsReleaseResponse = {
@@ -531,8 +538,422 @@ describe('rateLimitedFetch (429 retry logic)', () => {
 describe('OAuth API functions', () => {
   const originalFetch = globalThis.fetch;
 
+  beforeEach(() => {
+    resetRateLimiter();
+    jest.useFakeTimers();
+  });
+
   afterEach(() => {
     globalThis.fetch = originalFetch;
+    jest.useRealTimers();
+  });
+
+  function createMockResponse(
+    status: number,
+    body: unknown,
+    headers: Record<string, string> = {},
+  ): Response {
+    const headerMap = new Headers(headers);
+    return {
+      ok: status >= 200 && status < 300,
+      status,
+      statusText: status === 200 ? 'OK' : status === 429 ? 'Too Many Requests' : 'Error',
+      headers: headerMap,
+      json: () => Promise.resolve(body),
+      text: () => Promise.resolve(JSON.stringify(body)),
+    } as Response;
+  }
+
+  function advancePastDelay(): Promise<void> {
+    jest.advanceTimersByTime(5000);
+    return Promise.resolve();
+  }
+
+  describe('startOAuthFlow', () => {
+    it('calls worker /oauth/authorize with credentials headers', async () => {
+      globalThis.fetch = jest.fn(async () => {
+        return createMockResponse(200, {
+          authorizeUrl: 'https://discogs.com/oauth/authorize?oauth_token=abc',
+        });
+      });
+
+      const fetchPromise = startOAuthFlow(mockCredentials, 'https://my-collection.com/');
+      await advancePastDelay();
+      const result = await fetchPromise;
+
+      expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+      const [calledUrl, calledOptions] = (globalThis.fetch as jest.Mock).mock.calls[0];
+
+      expect(calledUrl).toContain('/oauth/authorize');
+      expect(calledUrl).toContain('callback_url=');
+      expect(calledOptions.headers).toEqual({
+        'X-Discogs-Consumer-Key': 'test-key',
+        'X-Discogs-Consumer-Secret': 'test-secret',
+      });
+      expect(result.authorizeUrl).toBe(
+        'https://discogs.com/oauth/authorize?oauth_token=abc',
+      );
+    });
+
+    it('throws DiscogsApiError on non-OK response', async () => {
+      globalThis.fetch = jest.fn(async () => {
+        return createMockResponse(401, { error: 'Unauthorized' });
+      });
+
+      const fetchPromise = startOAuthFlow(mockCredentials, 'https://my-collection.com/');
+      await advancePastDelay();
+
+      await expect(fetchPromise).rejects.toThrow(DiscogsApiError);
+    });
+
+    it('retries on 429 and succeeds', async () => {
+      let callCount = 0;
+      globalThis.fetch = jest.fn(async () => {
+        callCount++;
+        if (callCount === 1) {
+          return createMockResponse(429, {}, { 'Retry-After': '2' });
+        }
+        return createMockResponse(200, {
+          authorizeUrl: 'https://discogs.com/oauth/authorize?oauth_token=abc',
+        });
+      });
+
+      const fetchPromise = startOAuthFlow(mockCredentials, 'https://my-collection.com/');
+      await advancePastDelay();
+      jest.advanceTimersByTime(2000);
+      await Promise.resolve();
+      jest.advanceTimersByTime(5000);
+      await Promise.resolve();
+
+      const result = await fetchPromise;
+
+      expect(callCount).toBe(2);
+      expect(result.authorizeUrl).toContain('oauth_token=abc');
+    });
+  });
+
+  describe('checkOAuthStatus', () => {
+    it('returns authenticated true when worker confirms', async () => {
+      globalThis.fetch = jest.fn(async () => {
+        return createMockResponse(200, { authenticated: true });
+      });
+
+      const fetchPromise = checkOAuthStatus(mockCredentials);
+      await advancePastDelay();
+      const result = await fetchPromise;
+
+      expect(result.authenticated).toBe(true);
+
+      const [calledUrl, calledOptions] = (globalThis.fetch as jest.Mock).mock.calls[0];
+      expect(calledUrl).toContain('/oauth/status');
+      expect(calledOptions.headers).toEqual({
+        'X-Discogs-Consumer-Key': 'test-key',
+        'X-Discogs-Consumer-Secret': 'test-secret',
+      });
+    });
+
+    it('returns authenticated false on non-OK response', async () => {
+      globalThis.fetch = jest.fn(async () => {
+        return createMockResponse(401, { error: 'Unauthorized' });
+      });
+
+      const fetchPromise = checkOAuthStatus(mockCredentials);
+      await advancePastDelay();
+      const result = await fetchPromise;
+
+      expect(result.authenticated).toBe(false);
+    });
+
+    it('retries on 429 and returns result on success', async () => {
+      let callCount = 0;
+      globalThis.fetch = jest.fn(async () => {
+        callCount++;
+        if (callCount === 1) {
+          return createMockResponse(429, {}, { 'Retry-After': '2' });
+        }
+        return createMockResponse(200, { authenticated: true });
+      });
+
+      const fetchPromise = checkOAuthStatus(mockCredentials);
+      await advancePastDelay();
+      jest.advanceTimersByTime(2000);
+      await Promise.resolve();
+      jest.advanceTimersByTime(5000);
+      await Promise.resolve();
+
+      const result = await fetchPromise;
+
+      expect(callCount).toBe(2);
+      expect(result.authenticated).toBe(true);
+    });
+  });
+
+  describe('revokeOAuthToken', () => {
+    it('sends DELETE to /oauth/token with credentials headers', async () => {
+      globalThis.fetch = jest.fn(async () => {
+        return createMockResponse(200, { success: true });
+      });
+
+      const fetchPromise = revokeOAuthToken(mockCredentials);
+      await advancePastDelay();
+      await fetchPromise;
+
+      const [calledUrl, calledOptions] = (globalThis.fetch as jest.Mock).mock.calls[0];
+      expect(calledUrl).toContain('/oauth/token');
+      expect(calledOptions.method).toBe('DELETE');
+      expect(calledOptions.headers).toEqual({
+        'X-Discogs-Consumer-Key': 'test-key',
+        'X-Discogs-Consumer-Secret': 'test-secret',
+      });
+    });
+
+    it('throws DiscogsApiError on non-OK response', async () => {
+      globalThis.fetch = jest.fn(async () => {
+        return createMockResponse(500, { error: 'Internal error' });
+      });
+
+      const fetchPromise = revokeOAuthToken(mockCredentials);
+      await advancePastDelay();
+
+      await expect(fetchPromise).rejects.toThrow(DiscogsApiError);
+    });
+
+    it('retries on 429 and succeeds', async () => {
+      let callCount = 0;
+      globalThis.fetch = jest.fn(async () => {
+        callCount++;
+        if (callCount === 1) {
+          return createMockResponse(429, {}, { 'Retry-After': '2' });
+        }
+        return createMockResponse(200, { success: true });
+      });
+
+      const fetchPromise = revokeOAuthToken(mockCredentials);
+      await advancePastDelay();
+      jest.advanceTimersByTime(2000);
+      await Promise.resolve();
+      jest.advanceTimersByTime(5000);
+      await Promise.resolve();
+      await fetchPromise;
+
+      expect(callCount).toBe(2);
+    });
+  });
+});
+
+describe('buildFormatString', () => {
+  it('builds string for single CD', () => {
+    const formats: DiscogsCollectionFormat[] = [
+      { name: 'CD', qty: '1', descriptions: ['Album'] },
+    ];
+    expect(buildFormatString(formats)).toBe('CD, Album');
+  });
+
+  it('builds string for multi-disc CD', () => {
+    const formats: DiscogsCollectionFormat[] = [
+      { name: 'CD', qty: '2', descriptions: ['Album'] },
+    ];
+    expect(buildFormatString(formats)).toBe('2xCD, Album');
+  });
+
+  it('builds string for vinyl with multiple descriptions', () => {
+    const formats: DiscogsCollectionFormat[] = [
+      { name: 'Vinyl', qty: '1', descriptions: ['LP', 'Album', 'RE'] },
+    ];
+    expect(buildFormatString(formats)).toBe('Vinyl, LP, Album, RE');
+  });
+
+  it('builds string with no descriptions', () => {
+    const formats: DiscogsCollectionFormat[] = [
+      { name: 'CD', qty: '1' },
+    ];
+    expect(buildFormatString(formats)).toBe('CD');
+  });
+
+  it('builds string with empty descriptions array', () => {
+    const formats: DiscogsCollectionFormat[] = [
+      { name: 'CD', qty: '1', descriptions: [] },
+    ];
+    expect(buildFormatString(formats)).toBe('CD');
+  });
+
+  it('returns empty string for empty formats array', () => {
+    expect(buildFormatString([])).toBe('');
+  });
+
+  it('uses only first format when multiple are provided', () => {
+    const formats: DiscogsCollectionFormat[] = [
+      { name: 'CD', qty: '1', descriptions: ['Album'] },
+      { name: 'DVD', qty: '1', descriptions: ['DVD-Video'] },
+    ];
+    expect(buildFormatString(formats)).toBe('CD, Album');
+  });
+});
+
+describe('mapCollectionReleaseToItem', () => {
+  function createMockRelease(
+    overrides: Partial<DiscogsCollectionRelease> = {},
+  ): DiscogsCollectionRelease {
+    return {
+      id: 1001,
+      instance_id: 5001,
+      folder_id: 1,
+      rating: 0,
+      date_added: '2025-01-15T10:30:00-08:00',
+      basic_information: {
+        id: 249504,
+        title: 'Never Gonna Give You Up',
+        year: 1987,
+        resource_url: 'https://api.discogs.com/releases/249504',
+        thumb: 'https://example.com/thumb-150.jpg',
+        cover_image: 'https://example.com/cover-600.jpg',
+        formats: [
+          { name: 'CD', qty: '1', descriptions: ['Album'] },
+        ],
+        labels: [
+          { name: 'RCA', catno: 'PD 71325', id: 895 },
+        ],
+        artists: [
+          { name: 'Rick Astley', id: 72872 },
+        ],
+        genres: ['Electronic', 'Pop'],
+        styles: ['Synth-pop'],
+      },
+      ...overrides,
+    };
+  }
+
+  it('maps basic fields correctly', () => {
+    const release = createMockRelease();
+    const item = mapCollectionReleaseToItem(release, 'CDs');
+
+    expect(item.releaseId).toBe(249504);
+    expect(item.title).toBe('Never Gonna Give You Up');
+    expect(item.artist).toBe('Rick Astley');
+    expect(item.label).toBe('RCA');
+    expect(item.catalogNumber).toBe('PD 71325');
+    expect(item.format).toBe('CD, Album');
+    expect(item.collectionFolder).toBe('CDs');
+    expect(item.dateAdded).toBe('2025-01-15T10:30:00-08:00');
+    expect(item.year).toBe(1987);
+    expect(item.genres).toEqual(['Electronic', 'Pop']);
+    expect(item.styles).toEqual(['Synth-pop']);
+    expect(item.thumbUrl).toBe('https://example.com/thumb-150.jpg');
+    expect(item.coverUrl).toBe('https://example.com/cover-600.jpg');
+  });
+
+  it('sets condition and notes to empty, purchasePrice to null', () => {
+    const release = createMockRelease();
+    const item = mapCollectionReleaseToItem(release, 'All');
+
+    expect(item.mediaCondition).toBe('');
+    expect(item.sleeveCondition).toBe('');
+    expect(item.collectionNotes).toBe('');
+    expect(item.purchasePrice).toBeNull();
+  });
+
+  it('maps rating when present', () => {
+    const release = createMockRelease({ rating: 4 });
+    const item = mapCollectionReleaseToItem(release, 'All');
+
+    expect(item.rating).toBe('4');
+  });
+
+  it('maps rating as empty string when zero', () => {
+    const release = createMockRelease({ rating: 0 });
+    const item = mapCollectionReleaseToItem(release, 'All');
+
+    expect(item.rating).toBe('');
+  });
+
+  it('handles multiple artists', () => {
+    const release = createMockRelease({
+      basic_information: {
+        ...createMockRelease().basic_information,
+        artists: [
+          { name: 'Artist One', id: 1 },
+          { name: 'Artist Two', id: 2 },
+        ],
+      },
+    });
+    const item = mapCollectionReleaseToItem(release, 'All');
+
+    expect(item.artist).toBe('Artist One, Artist Two');
+  });
+
+  it('handles empty labels array', () => {
+    const release = createMockRelease({
+      basic_information: {
+        ...createMockRelease().basic_information,
+        labels: [],
+      },
+    });
+    const item = mapCollectionReleaseToItem(release, 'All');
+
+    expect(item.label).toBe('');
+    expect(item.catalogNumber).toBe('');
+  });
+
+  it('handles year 0 as undefined', () => {
+    const release = createMockRelease({
+      basic_information: {
+        ...createMockRelease().basic_information,
+        year: 0,
+      },
+    });
+    const item = mapCollectionReleaseToItem(release, 'All');
+
+    expect(item.year).toBeUndefined();
+    expect(item.released).toBe('');
+  });
+
+  it('handles missing genres and styles', () => {
+    const release = createMockRelease({
+      basic_information: {
+        ...createMockRelease().basic_information,
+        genres: undefined,
+        styles: undefined,
+      },
+    });
+    const item = mapCollectionReleaseToItem(release, 'All');
+
+    expect(item.genres).toEqual([]);
+    expect(item.styles).toEqual([]);
+  });
+
+  it('handles empty thumb and cover_image', () => {
+    const release = createMockRelease({
+      basic_information: {
+        ...createMockRelease().basic_information,
+        thumb: '',
+        cover_image: '',
+      },
+    });
+    const item = mapCollectionReleaseToItem(release, 'All');
+
+    expect(item.thumbUrl).toBeUndefined();
+    expect(item.coverUrl).toBeUndefined();
+  });
+
+  it('does not include id field', () => {
+    const release = createMockRelease();
+    const item = mapCollectionReleaseToItem(release, 'All');
+
+    expect('id' in item).toBe(false);
+  });
+});
+
+describe('Collection API functions', () => {
+  const originalFetch = globalThis.fetch;
+
+  beforeEach(() => {
+    resetRateLimiter();
+    jest.useFakeTimers();
+  });
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+    jest.useRealTimers();
   });
 
   function createMockResponse(
@@ -551,93 +972,94 @@ describe('OAuth API functions', () => {
     } as Response;
   }
 
-  describe('startOAuthFlow', () => {
-    it('calls worker /oauth/authorize with credentials headers', async () => {
+  function advancePastDelay(): Promise<void> {
+    jest.advanceTimersByTime(5000);
+    return Promise.resolve();
+  }
+
+  const rateLimitHeaders = {
+    'X-Discogs-Ratelimit': '60',
+    'X-Discogs-Ratelimit-Used': '1',
+    'X-Discogs-Ratelimit-Remaining': '59',
+  };
+
+  describe('fetchIdentity', () => {
+    it('calls /oauth/identity with credentials headers', async () => {
       globalThis.fetch = jest.fn(async () => {
-        return createMockResponse(200, {
-          authorizeUrl: 'https://discogs.com/oauth/authorize?oauth_token=abc',
-        });
+        return createMockResponse(
+          200,
+          { id: 123, username: 'testuser', resource_url: 'https://api.discogs.com/users/testuser', consumer_name: 'MyApp' },
+          rateLimitHeaders,
+        );
       });
 
-      const result = await startOAuthFlow(mockCredentials, 'https://my-collection.com/');
+      const fetchPromise = fetchIdentity(mockCredentials);
+      await advancePastDelay();
+      const result = await fetchPromise;
 
-      expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+      expect(result.username).toBe('testuser');
+      expect(result.id).toBe(123);
+
       const [calledUrl, calledOptions] = (globalThis.fetch as jest.Mock).mock.calls[0];
-
-      expect(calledUrl).toContain('/oauth/authorize');
-      expect(calledUrl).toContain('callback_url=');
+      expect(calledUrl).toBe('https://discogs.my-collection.mobulum.com/oauth/identity');
       expect(calledOptions.headers).toEqual({
         'X-Discogs-Consumer-Key': 'test-key',
         'X-Discogs-Consumer-Secret': 'test-secret',
       });
-      expect(result.authorizeUrl).toBe(
-        'https://discogs.com/oauth/authorize?oauth_token=abc',
-      );
-    });
-
-    it('throws on non-OK response', async () => {
-      globalThis.fetch = jest.fn(async () => {
-        return createMockResponse(401, { error: 'Unauthorized' });
-      });
-
-      await expect(
-        startOAuthFlow(mockCredentials, 'https://my-collection.com/'),
-      ).rejects.toThrow('OAuth authorize failed');
     });
   });
 
-  describe('checkOAuthStatus', () => {
-    it('returns authenticated true when worker confirms', async () => {
+  describe('fetchCollectionFolders', () => {
+    it('calls /users/{username}/collection/folders and returns folders', async () => {
       globalThis.fetch = jest.fn(async () => {
-        return createMockResponse(200, { authenticated: true });
+        return createMockResponse(
+          200,
+          {
+            folders: [
+              { id: 0, count: 100, name: 'All', resource_url: '' },
+              { id: 1, count: 50, name: 'CDs', resource_url: '' },
+            ],
+          },
+          rateLimitHeaders,
+        );
       });
 
-      const result = await checkOAuthStatus(mockCredentials);
+      const fetchPromise = fetchCollectionFolders('testuser', mockCredentials);
+      await advancePastDelay();
+      const result = await fetchPromise;
 
-      expect(result.authenticated).toBe(true);
+      expect(result).toHaveLength(2);
+      expect(result[0].name).toBe('All');
+      expect(result[1].name).toBe('CDs');
 
-      const [calledUrl, calledOptions] = (globalThis.fetch as jest.Mock).mock.calls[0];
-      expect(calledUrl).toContain('/oauth/status');
-      expect(calledOptions.headers).toEqual({
-        'X-Discogs-Consumer-Key': 'test-key',
-        'X-Discogs-Consumer-Secret': 'test-secret',
-      });
-    });
-
-    it('returns authenticated false on non-OK response', async () => {
-      globalThis.fetch = jest.fn(async () => {
-        return createMockResponse(401, { error: 'Unauthorized' });
-      });
-
-      const result = await checkOAuthStatus(mockCredentials);
-      expect(result.authenticated).toBe(false);
+      const [calledUrl] = (globalThis.fetch as jest.Mock).mock.calls[0];
+      expect(calledUrl).toBe('https://discogs.my-collection.mobulum.com/users/testuser/collection/folders');
     });
   });
 
-  describe('revokeOAuthToken', () => {
-    it('sends DELETE to /oauth/token with credentials headers', async () => {
+  describe('fetchCollectionPage', () => {
+    it('calls correct URL with page and per_page params', async () => {
       globalThis.fetch = jest.fn(async () => {
-        return createMockResponse(200, { success: true });
+        return createMockResponse(
+          200,
+          {
+            pagination: { page: 1, pages: 3, per_page: 100, items: 250 },
+            releases: [],
+          },
+          rateLimitHeaders,
+        );
       });
 
-      await revokeOAuthToken(mockCredentials);
+      const fetchPromise = fetchCollectionPage('testuser', 0, 2, 100, mockCredentials);
+      await advancePastDelay();
+      const result = await fetchPromise;
 
-      const [calledUrl, calledOptions] = (globalThis.fetch as jest.Mock).mock.calls[0];
-      expect(calledUrl).toContain('/oauth/token');
-      expect(calledOptions.method).toBe('DELETE');
-      expect(calledOptions.headers).toEqual({
-        'X-Discogs-Consumer-Key': 'test-key',
-        'X-Discogs-Consumer-Secret': 'test-secret',
-      });
-    });
+      expect(result.pagination.pages).toBe(3);
+      expect(result.pagination.items).toBe(250);
 
-    it('throws on non-OK response', async () => {
-      globalThis.fetch = jest.fn(async () => {
-        return createMockResponse(500, { error: 'Internal error' });
-      });
-
-      await expect(revokeOAuthToken(mockCredentials)).rejects.toThrow(
-        'OAuth revoke failed',
+      const [calledUrl] = (globalThis.fetch as jest.Mock).mock.calls[0];
+      expect(calledUrl).toBe(
+        'https://discogs.my-collection.mobulum.com/users/testuser/collection/folders/0/releases?page=2&per_page=100',
       );
     });
   });

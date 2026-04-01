@@ -52,7 +52,7 @@
     "pl": "Polski"
   },
   "table": {
-    "noData": "Brak elementów w kolekcji. Zaimportuj plik CSV, aby rozpocząć.",
+    "noData": "Brak elementów w kolekcji. Zaimportuj plik CSV lub zsynchronizuj z Discogs, aby rozpocząć.",
     "noResults": "Brak elementów pasujących do wyszukiwania.",
     "totalItems": "{{count}} elementów",
     "priceTotal": "Suma: {{total}}"
@@ -102,6 +102,15 @@
     "suggestedPrice": "Sugerowana cena",
     "yourCondition": "twój",
     "noPriceSuggestions": "Brak sugerowanych cen.",
-    "rateLimitWait": "Limit zapytań, oczekiwanie {{seconds}}s (próba {{attempt}}/{{maxRetries}})..."
+    "rateLimitWait": "Limit zapytań, oczekiwanie {{seconds}}s (próba {{attempt}}/{{maxRetries}})...",
+    "syncCollection": "Synchronizuj kolekcję",
+    "syncing": "Synchronizacja...",
+    "syncPhaseIdentity": "Pobieranie tożsamości...",
+    "syncPhaseFolders": "Pobieranie folderów...",
+    "syncPhaseReleases": "Pobieranie wydań (strona {{current}}/{{total}})...",
+    "syncPhaseSaving": "Zapisywanie...",
+    "syncSuccess": "Synchronizacja zakończona: {{added}} dodanych, {{skipped}} pominiętych.",
+    "syncError": "Błąd synchronizacji: {{message}}",
+    "cancelSync": "Anuluj"
   }
 }
