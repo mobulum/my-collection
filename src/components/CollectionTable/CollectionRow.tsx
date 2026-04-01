@@ -2,7 +2,7 @@ import { useTranslation } from 'react-i18next';
 import type { CollectionItem, ColumnKey } from '../../db/types';
 import { PurchasePriceInput } from './PurchasePriceInput';
 import { ExpandedDetails } from './ExpandedDetails';
-import { formatDate } from '../../utils/formatters';
+import { formatDate, normalizeFormat } from '../../utils/formatters';
 
 interface CollectionRowProps {
   item: CollectionItem;
@@ -89,6 +89,12 @@ export function CollectionRow({
             {item.communityRating != null
               ? item.communityRating.toFixed(2)
               : ''}
+          </span>
+        );
+      case 'format':
+        return (
+          <span className="whitespace-nowrap font-medium">
+            {normalizeFormat(item.format)}
           </span>
         );
       case 'suggestedPrice': {

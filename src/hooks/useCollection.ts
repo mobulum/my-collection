@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { db } from '../db/database';
 import { updatePurchasePrice } from '../db/operations';
+import { normalizeFormat } from '../utils/formatters';
 import type { CollectionItem, SortConfig } from '../db/types';
 
 export function useCollection() {
@@ -64,6 +65,12 @@ export function useCollection() {
         if (aVal === null) return 1;
         if (bVal === null) return -1;
         return (aVal - bVal) * multiplier;
+      }
+
+      if (field === 'format') {
+        aVal = normalizeFormat(a.format);
+        bVal = normalizeFormat(b.format);
+        return (aVal as string).localeCompare(bVal as string) * multiplier;
       }
 
       aVal = a[field] ?? '';

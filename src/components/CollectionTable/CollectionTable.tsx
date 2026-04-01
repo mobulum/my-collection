@@ -13,6 +13,7 @@ const SORTABLE_FIELDS: SortField[] = [
   'collectionFolder',
   'artist',
   'title',
+  'format',
   'dateAdded',
   'purchasePrice',
   'suggestedPrice',

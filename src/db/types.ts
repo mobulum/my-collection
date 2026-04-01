@@ -81,6 +81,7 @@ export type SortField =
   | 'collectionFolder'
   | 'artist'
   | 'title'
+  | 'format'
   | 'purchasePrice'
   | 'suggestedPrice';
 
@@ -133,6 +134,7 @@ export const DEFAULT_VISIBLE_COLUMNS: ColumnKey[] = [
   'thumbUrl',
   'artist',
   'title',
+  'format',
   'collectionFolder',
   'dateAdded',
   'mediaCondition',
