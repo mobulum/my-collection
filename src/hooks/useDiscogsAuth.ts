@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useMemo } from 'react';
 import type { DiscogsCredentials } from '../services/discogsApi';
 import {
   startOAuthFlow,
@@ -52,14 +52,19 @@ export function useDiscogsAuth() {
 
   const isAuthenticated = hasCredentials && isOAuthComplete;
 
-  const credentials: DiscogsCredentials | null = hasCredentials
-    ? { consumerKey, consumerSecret }
-    : null;
+  const credentials: DiscogsCredentials | null = useMemo(
+    () => (hasCredentials ? { consumerKey, consumerSecret } : null),
+    [hasCredentials, consumerKey, consumerSecret],
+  );
+
+  // Reset OAuth state synchronously during render when credentials are cleared
+  if (!hasCredentials && isOAuthComplete) {
+    setIsOAuthComplete(false);
+  }
 
   // Check OAuth status on mount and when credentials change
   useEffect(() => {
-    if (!hasCredentials) {
-      setIsOAuthComplete(false);
+    if (!credentials) {
       return;
     }
 
@@ -73,19 +78,21 @@ export function useDiscogsAuth() {
     }
 
     // Check if worker has cached access token for these credentials
-    const creds: DiscogsCredentials = { consumerKey, consumerSecret };
+    let cancelled = false;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- loading flag before async call is intentional
     setIsOAuthLoading(true);
-    checkOAuthStatus(creds)
+    checkOAuthStatus(credentials)
       .then((status) => {
-        setIsOAuthComplete(status.authenticated);
+        if (!cancelled) setIsOAuthComplete(status.authenticated);
       })
       .catch(() => {
-        setIsOAuthComplete(false);
+        if (!cancelled) setIsOAuthComplete(false);
       })
       .finally(() => {
-        setIsOAuthLoading(false);
+        if (!cancelled) setIsOAuthLoading(false);
       });
-  }, [consumerKey, consumerSecret, hasCredentials]);
+    return () => { cancelled = true; };
+  }, [credentials]);
 
   const saveCredentials = useCallback(
     (key: string, secret: string) => {

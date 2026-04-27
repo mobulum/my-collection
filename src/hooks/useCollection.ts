@@ -25,8 +25,19 @@ export function useCollection() {
   }, []);
 
   useEffect(() => {
-    loadItems();
-  }, [loadItems]);
+    let cancelled = false;
+    db.collection.toArray()
+      .then((allItems) => {
+        if (!cancelled) setItems(allItems);
+      })
+      .catch((error) => {
+        console.error('Failed to load collection:', error);
+      })
+      .finally(() => {
+        if (!cancelled) setIsLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, []);
 
   const filteredAndSortedItems = useMemo(() => {
     let result = [...items];
