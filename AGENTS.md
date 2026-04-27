@@ -23,10 +23,10 @@ CI pipeline runs: lint -> test -> build (Node 22).
 
 ## Tech Stack
 
-- React 19 + TypeScript 5.9 + Vite 8 + TailwindCSS 4
+- React 19 + TypeScript 6 + Vite 8 + TailwindCSS 4
 - Dexie.js (IndexedDB), PapaParse, react-i18next
 - Jest 30 + ts-jest + @testing-library/react + fake-indexeddb
-- ESLint 9 flat config (no Prettier)
+- ESLint 10 flat config (no Prettier)
 - Package type: `"module"` (ESM)
 - Deployment: GitHub Pages via GitHub Actions (`.github/workflows/deploy.yml`)
 
@@ -124,9 +124,9 @@ Persisted in localStorage via `useColumnVisibility` hook. `DEFAULT_VISIBLE_COLUM
 ### Test files
 | File | Focus | Tests |
 |------|-------|-------|
-| `csvParser.test.ts` | CSV parsing, condition mapping | 13 |
-| `database.test.ts` | Dexie operations, dedup, merge | 14 |
-| `discogsApi.test.ts` | API client, rate limiting, OAuth | 25 |
+| `csvParser.test.ts` | CSV parsing, condition mapping | 12 |
+| `database.test.ts` | Dexie operations, dedup, merge | 15 |
+| `discogsApi.test.ts` | API client, rate limiting, OAuth | 48 |
 | `formatters.test.ts` | normalizeFormat (CD/DVD/BD/VINYL) | 21 |
 | `CollectionTable.test.tsx` | Table rendering, sorting, UI | 6 |
 
@@ -282,7 +282,7 @@ tsconfig.json                   # Root config with project references
 tsconfig.app.json               # App config (erasableSyntaxOnly, verbatimModuleSyntax)
 tsconfig.test.json              # Test config (no verbatimModuleSyntax, esModuleInterop)
 vite.config.ts                  # Vite 8 config (base: '/', react, tailwindcss)
-eslint.config.js                # ESLint 9 flat config (ESM)
+eslint.config.js                # ESLint 10 flat config (ESM)
 package.json                    # type: "module", scripts, dependencies
 AGENTS.md                       # This file
 ```

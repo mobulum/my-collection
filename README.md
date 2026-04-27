@@ -1,73 +1,64 @@
-# React + TypeScript + Vite
+# My Collection
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+A client-side web app for managing your Discogs vinyl/CD/DVD/BD collection. Import your Discogs CSV export, enrich it with metadata and price suggestions via the Discogs API, search, sort, and track purchase prices — all stored locally in IndexedDB.
 
-Currently, two official plugins are available:
+**Live:** deployed to GitHub Pages via CI.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+## Features
 
-## React Compiler
+- **CSV import** — drag-and-drop or pick your Discogs collection export file
+- **Discogs API enrichment** — fetch cover art, genres, styles, tracklist, community stats, and price suggestions (OAuth 1.0a via Cloudflare Worker proxy)
+- **Search & sort** — filter by artist/title, sort by date added, price, format, folder, etc.
+- **Suggested price** — computed per-item from Discogs price suggestions based on media condition
+- **Purchase price tracking** — inline-editable field with running total
+- **Column customization** — show/hide any of the 25 available columns
+- **Internationalization** — English and Polish (auto-detected)
+- **Offline-first** — all data stored in the browser (IndexedDB via Dexie.js)
+- **Dark mode** — via Tailwind `dark:` variants
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+## Tech Stack
 
-## Expanding the ESLint configuration
+| Layer | Technology |
+|-------|------------|
+| UI | React 19, TypeScript 6, Vite 8, TailwindCSS 4 |
+| Storage | Dexie.js (IndexedDB) |
+| I18n | react-i18next |
+| CSV | PapaParse |
+| Testing | Jest 30, Testing Library, fake-indexeddb |
+| Linting | ESLint 10 (flat config) |
+| CI/CD | GitHub Actions → GitHub Pages |
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+## Getting Started
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+npm install
+npm run dev          # start dev server with HMR
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+Open http://localhost:5173.
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+## Scripts
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+| Command | Description |
+|---------|-------------|
+| `npm run dev` | Start Vite dev server |
+| `npm run build` | Type-check + production build |
+| `npm run lint` | Run ESLint |
+| `npm test` | Run all tests |
+| `npm run test:watch` | Run tests in watch mode |
+| `npm run preview` | Preview production build locally |
+
+## Project Structure
+
 ```
+src/
+  components/       # React UI components (CollectionTable, CSVImport, DiscogsSettings, Layout)
+  db/               # Dexie schema, CRUD operations, types
+  hooks/            # Custom hooks (useCollection, useCSVImport, useDiscogsFetch, useDiscogsAuth)
+  i18n/             # i18next config + EN/PL translations
+  services/         # Discogs API client (rate limiting, OAuth)
+  utils/            # CSV parser, formatters
+__tests__/          # Jest test suites
+```
+
+See [AGENTS.md](./AGENTS.md) for detailed architecture documentation.
